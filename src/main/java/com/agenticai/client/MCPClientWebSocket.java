@@ -15,7 +15,13 @@ import java.util.Map;
 public class MCPClientWebSocket {
 
     private final WebSocket webSocket;
+
+    // TaskId → Future mapping (existing functionality)
     private final Map<String, CompletableFuture<String>> pendingTasks = new ConcurrentHashMap<>();
+
+    // Session tracking: taskId → associated session (for repo/multi-chunk context)
+    private final Map<String, String> taskSessions = new ConcurrentHashMap<>();
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -38,7 +44,6 @@ public class MCPClientWebSocket {
                     public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
                         String rawResponse = data.toString();
                         try {
-                            // Try parsing as JSON
                             JsonNode jsonNode = objectMapper.readTree(rawResponse);
                             String taskId = jsonNode.has("taskId") ? jsonNode.get("taskId").asText() : null;
                             String response = jsonNode.has("response") ? jsonNode.get("response").asText() : rawResponse;
@@ -48,13 +53,13 @@ public class MCPClientWebSocket {
                                 if (future != null) {
                                     future.complete(response);
                                 }
+                                // Optional: clean up session mapping after completion
+                                taskSessions.remove(taskId);
                             } else {
-                                // No taskId provided in JSON; complete the first pending task
                                 completeFirstPendingTask(response);
                             }
 
                         } catch (Exception e) {
-                            // Plain text fallback
                             completeFirstPendingTask(rawResponse);
                         }
                         return Listener.super.onText(ws, data, last);
@@ -71,25 +76,34 @@ public class MCPClientWebSocket {
     /**
      * Send a message to the MCP/LLM server
      *
-     * @param taskId  unique identifier from frontend
-     * @param message task/prompt to send
+     * @param taskId     unique identifier for this request
+     * @param message    the task/prompt to send
+     * @param sessionId  optional session ID to track repo/multi-chunk tasks
      * @return CompletableFuture that completes when response arrives
      */
-    public CompletableFuture<String> sendMessage(String taskId, String message) {
+    public CompletableFuture<String> sendMessage(String taskId, String message, String sessionId) {
+        if (sessionId != null) {
+            taskSessions.put(taskId, sessionId);
+        }
+
         CompletableFuture<String> future = new CompletableFuture<>();
         pendingTasks.put(taskId, future);
 
-        // Wrap the message as JSON including the taskId
         String payload = "{\"taskId\":\"" + taskId + "\",\"task\":\"" + message + "\"}";
-
         webSocket.sendText(payload, true)
                 .exceptionally(ex -> {
                     future.completeExceptionally(ex);
                     pendingTasks.remove(taskId);
+                    taskSessions.remove(taskId);
                     return null;
                 });
 
         return future;
+    }
+
+    // Overloaded method for backward compatibility (existing code)
+    public CompletableFuture<String> sendMessage(String taskId, String message) {
+        return sendMessage(taskId, message, null);
     }
 
     /**
@@ -102,8 +116,14 @@ public class MCPClientWebSocket {
             if (future != null) {
                 future.complete(response);
             }
+            taskSessions.remove(firstTaskId);
         } else {
             System.err.println("Received response but no pending tasks: " + response);
         }
+    }
+
+    // Optional: get sessionId for a given taskId (for AgentService tracking)
+    public String getSessionForTask(String taskId) {
+        return taskSessions.get(taskId);
     }
 }
