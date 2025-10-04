@@ -2,84 +2,175 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>Comms Agentic AI - Java Developer</title>
+    <title>Comms - Agentic AI Solution</title>
     <style>
         body {
-          font-family: Arial, sans-serif;
-          background-color: #f9fafb;
+          font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+          background-color: #f8f5fa;
           margin: 0;
           padding: 0;
           display: flex;
           flex-direction: column;
           height: 100vh;
         }
+
+        /* Header Panel with inline robot SVG */
+        header {
+          background-color: #4b0082;
+          color: white;
+          padding: 14px 16px;
+          font-size: 20px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          justify-content: center;
+        }
+
+        /* Icon styling */
+        .robot-icon {
+          width: 34px;
+          height: 34px;
+          flex: 0 0 34px;
+        }
+
+        #title-text {
+          display: inline-block;
+          vertical-align: middle;
+        }
+
         #chat-container {
           flex: 1;
           padding: 20px;
           overflow-y: auto;
           display: flex;
           flex-direction: column;
+          scroll-behavior: smooth;
         }
+
         .message {
           max-width: 75%;
           padding: 12px 16px;
           margin: 6px 0;
           border-radius: 12px;
-          line-height: 1.4;
+          line-height: 1.5;
           animation: fadeIn 0.3s ease-in-out;
           white-space: pre-wrap;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
+
         .user {
-          background-color: #2563eb;
+          background-color: #800000; /* maroon */
           color: #fff;
           align-self: flex-end;
           border-bottom-right-radius: 4px;
         }
+
         .bot {
-          background-color: #e5e7eb;
-          color: #111;
+          background-color: #e6ccff; /* light purple */
+          color: #2d004d;
           align-self: flex-start;
           border-bottom-left-radius: 4px;
         }
+
         #input-container {
           display: flex;
           padding: 12px;
           border-top: 1px solid #ddd;
           background: #fff;
+          align-items: flex-end;
+          box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
         }
+
+        /* Text area styling: auto-expand up to 200px then show vertical scroll */
         #taskInput {
           flex: 1;
-          padding: 10px;
+          padding: 10px 12px;
           font-size: 14px;
           border: 1px solid #ccc;
           border-radius: 6px;
+          resize: none;
+          min-height: 50px;
+          max-height: 200px;
+          overflow-y: auto; /* shows scrollbar when overflowing */
+          font-family: 'Segoe UI', sans-serif;
+          line-height: 1.4;
+          transition: border-color 0.2s ease-in-out;
         }
+
+        #taskInput:focus {
+          outline: none;
+          border-color: #4b0082;
+        }
+
+        /* Green send button */
         #sendButton {
           margin-left: 8px;
-          padding: 10px 16px;
-          background: #2563eb;
+          padding: 10px 18px;
+          background: #28a745; /* green */
           color: white;
           border: none;
           border-radius: 6px;
           cursor: pointer;
+          transition: background 0.2s ease-in-out;
+          font-weight: 500;
         }
+
         #sendButton:hover {
-          background: #1e40af;
+          background: #218838;
         }
+
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
+
         .typing {
           font-style: italic;
           color: #6b7280;
         }
+
+        /* small responsive tweak */
+        @media (max-width: 520px) {
+          header { font-size: 16px; padding: 12px 10px; gap: 8px; }
+          .robot-icon { width: 28px; height: 28px; flex: 0 0 28px; }
+          #sendButton { padding: 8px 14px; }
+        }
     </style>
 </head>
 <body>
+
+<header>
+    <!-- Inline SVG: professionally dressed robot (head + suit + tie) -->
+    <svg class="robot-icon" role="img" aria-label="Robot agent icon" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <!-- Shoulders / suit -->
+        <rect x="8" y="30" width="48" height="26" rx="4" ry="4" fill="#2f3a44"/>
+        <!-- Shirt (slightly lighter) -->
+        <rect x="20" y="34" width="24" height="20" rx="2" ry="2" fill="#f4f6fb"/>
+        <!-- Tie -->
+        <polygon points="32,36 30,44 32,54 34,44" fill="#00cfa9"/>
+        <rect x="30" y="32" width="4" height="6" rx="1" ry="1" fill="#00cfa9"/>
+        <!-- Head -->
+        <rect x="14" y="6" width="36" height="28" rx="6" ry="6" fill="#e9eef8" stroke="#c7d3e6" stroke-width="1"/>
+        <!-- Eyes -->
+        <rect x="22" y="16" width="6" height="6" rx="1.5" ry="1.5" fill="#00cfa9"/>
+        <rect x="36" y="16" width="6" height="6" rx="1.5" ry="1.5" fill="#00cfa9"/>
+        <!-- Mouth -->
+        <rect x="26" y="24" width="12" height="2" rx="1" ry="1" fill="#b7c2d6"/>
+        <!-- Antenna -->
+        <line x1="32" y1="6" x2="32" y2="2" stroke="#b7c2d6" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="32" cy="2" r="2.5" fill="#00cfa9"/>
+    </svg>
+
+    <span id="title-text">Comms - Agentic AI Java Expert</span>
+</header>
+
 <div id="chat-container"></div>
+
 <div id="input-container">
-    <input id="taskInput" type="text" placeholder="Ask the Agent to refactor or explain code..." />
+    <textarea id="taskInput" placeholder="I am a Java Expert, ask me anything about Java "></textarea>
     <button id="sendButton">Send</button>
 </div>
 
@@ -87,7 +178,6 @@
     const chatContainer = document.getElementById("chat-container");
     const taskInput = document.getElementById("taskInput");
     const sendButton = document.getElementById("sendButton");
-
     const botMessages = new Map();
 
     function generateTaskId() {
@@ -119,7 +209,6 @@
       if (!task) return;
 
       const taskId = generateTaskId();
-
       addMessage(task, "user");
       taskInput.value = "";
 
@@ -133,9 +222,8 @@
           body: JSON.stringify({ taskId, task })
         });
 
-        const data = await response.json(); // Expect JSON now
+        const data = await response.json();
         const elem = botMessages.get(data.taskId);
-
         if (elem) {
           typeMessage("AI says: " + data.answer, elem);
           botMessages.delete(data.taskId);
@@ -150,10 +238,20 @@
     }
 
     sendButton.addEventListener("click", sendMessage);
+
+    // Enter to send, Shift+Enter for newline
     taskInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") sendMessage();
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Auto-adjust textarea height (expand until max-height then show scrollbar)
+    taskInput.addEventListener("input", () => {
+      taskInput.style.height = "auto";
+      taskInput.style.height = Math.min(taskInput.scrollHeight, 200) + "px";
     });
 </script>
-
 </body>
 </html>
