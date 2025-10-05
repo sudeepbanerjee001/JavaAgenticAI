@@ -2,14 +2,15 @@ server:
   port: 8081
 
 tool:
-  endpoint: http://localhost:8081/invoke
+  endpoint: http://localhost:8081/agent/invoke
   name: Java Agentic AI Developer
   intents:
     - codeAssist
     - refactorCode
     - debugCode
+    - microservice
   description: Expert Java developer assistant
 
 mcp:
   server:
-    url: ws://localhost:8080
+    url: ws://localhost:8080/mcp
