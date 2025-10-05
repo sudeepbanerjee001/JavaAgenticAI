@@ -1,129 +1,107 @@
 package com.agenticai.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.net.http.WebSocket.Listener;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletionStage;
+
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class MCPClientWebSocket {
 
     private final WebSocket webSocket;
-
-    // TaskId → Future mapping (existing functionality)
     private final Map<String, CompletableFuture<String>> pendingTasks = new ConcurrentHashMap<>();
-
-    // Session tracking: taskId → associated session (for repo/multi-chunk context)
-    private final Map<String, String> taskSessions = new ConcurrentHashMap<>();
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Connects to MCP WebSocket server
-     *
-     * @param serverUrl e.g. "ws://localhost:8081"
-     */
-    public MCPClientWebSocket(String serverUrl) {
+    public MCPClientWebSocket(String serverUrl) throws Exception {
+        System.out.println("[MCPClientWebSocket] Connecting to " + serverUrl);
         HttpClient client = HttpClient.newHttpClient();
-        this.webSocket = client.newWebSocketBuilder()
-                .buildAsync(URI.create(serverUrl + "/mcp"), new Listener() {
-
-                    @Override
-                    public void onOpen(WebSocket ws) {
-                        System.out.println("✅ Connected to MCP WebSocket");
-                        Listener.super.onOpen(ws);
-                    }
-
-                    @Override
-                    public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
-                        String rawResponse = data.toString();
-                        try {
-                            JsonNode jsonNode = objectMapper.readTree(rawResponse);
-                            String taskId = jsonNode.has("taskId") ? jsonNode.get("taskId").asText() : null;
-                            String response = jsonNode.has("response") ? jsonNode.get("response").asText() : rawResponse;
-
-                            if (taskId != null) {
-                                CompletableFuture<String> future = pendingTasks.remove(taskId);
-                                if (future != null) {
-                                    future.complete(response);
-                                }
-                                // Optional: clean up session mapping after completion
-                                taskSessions.remove(taskId);
-                            } else {
-                                completeFirstPendingTask(response);
-                            }
-
-                        } catch (Exception e) {
-                            completeFirstPendingTask(rawResponse);
-                        }
-                        return Listener.super.onText(ws, data, last);
-                    }
-
-                    @Override
-                    public void onError(WebSocket ws, Throwable error) {
-                        error.printStackTrace();
-                        Listener.super.onError(ws, error);
-                    }
-                }).join();
+        CompletableFuture<WebSocket> wsFuture = client.newWebSocketBuilder()
+                .buildAsync(URI.create(serverUrl + "/mcp"), new MCPWebSocketListener());
+        this.webSocket = wsFuture.join();
+        System.out.println("[MCPClientWebSocket] ✅ Connected successfully to MCP server");
     }
 
-    /**
-     * Send a message to the MCP/LLM server
-     *
-     * @param taskId     unique identifier for this request
-     * @param message    the task/prompt to send
-     * @param sessionId  optional session ID to track repo/multi-chunk tasks
-     * @return CompletableFuture that completes when response arrives
-     */
-    public CompletableFuture<String> sendMessage(String taskId, String message, String sessionId) {
-        if (sessionId != null) {
-            taskSessions.put(taskId, sessionId);
-        }
-
-        CompletableFuture<String> future = new CompletableFuture<>();
-        pendingTasks.put(taskId, future);
-
-        String payload = "{\"taskId\":\"" + taskId + "\",\"task\":\"" + message + "\"}";
-        webSocket.sendText(payload, true)
-                .exceptionally(ex -> {
-                    future.completeExceptionally(ex);
-                    pendingTasks.remove(taskId);
-                    taskSessions.remove(taskId);
-                    return null;
-                });
-
-        return future;
-    }
-
-    // Overloaded method for backward compatibility (existing code)
     public CompletableFuture<String> sendMessage(String taskId, String message) {
-        return sendMessage(taskId, message, null);
-    }
-
-    /**
-     * Complete the first pending task with a given response (used for plain text responses)
-     */
-    private void completeFirstPendingTask(String response) {
-        if (!pendingTasks.isEmpty()) {
-            String firstTaskId = pendingTasks.keySet().iterator().next();
-            CompletableFuture<String> future = pendingTasks.remove(firstTaskId);
-            if (future != null) {
-                future.complete(response);
-            }
-            taskSessions.remove(firstTaskId);
-        } else {
-            System.err.println("Received response but no pending tasks: " + response);
+        try {
+            String payload = String.format("{\"taskId\":\"%s\",\"task\":\"%s\"}", taskId, message);
+            System.out.println("[MCPClientWebSocket] Sending message: " + payload);
+            webSocket.sendText(payload, true);
+            return CompletableFuture.completedFuture("Message sent successfully");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return CompletableFuture.failedFuture(e);
         }
     }
 
-    // Optional: get sessionId for a given taskId (for AgentService tracking)
-    public String getSessionForTask(String taskId) {
-        return taskSessions.get(taskId);
+    /**
+     * Sends a task with taskId and JSON payload asynchronously.
+     */
+    public CompletableFuture<String> sendTask(String taskId, String payload) {
+        try {
+            // Build JSON message that MCP expects
+            Map<String, Object> message = Map.of(
+                    "taskId", taskId,
+                    "task", payload
+            );
+
+            String jsonMessage = objectMapper.writeValueAsString(message);
+            System.out.println("[MCPClientWebSocket] Sending task to MCP: " + jsonMessage);
+
+            CompletableFuture<String> future = new CompletableFuture<>();
+            pendingTasks.put(taskId, future);
+            webSocket.sendText(jsonMessage, true);
+
+            return future;
+        } catch (Exception e) {
+            CompletableFuture<String> failedFuture = new CompletableFuture<>();
+            failedFuture.completeExceptionally(e);
+            return failedFuture;
+        }
+    }
+
+    /**
+     * Internal WebSocket Listener class for handling responses.
+     */
+    private class MCPWebSocketListener implements Listener {
+
+        @Override
+        public void onOpen(WebSocket webSocket) {
+            System.out.println("[MCPClientWebSocket] Connection opened with MCP server");
+            Listener.super.onOpen(webSocket);
+        }
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            String message = data.toString();
+            System.out.println("[MCPClientWebSocket] 🔔 Received message from MCP: " + message);
+
+            try {
+                Map<String, Object> responseMap = objectMapper.readValue(message, Map.class);
+                String taskId = (String) responseMap.get("taskId");
+
+                if (taskId != null && pendingTasks.containsKey(taskId)) {
+                    CompletableFuture<String> future = pendingTasks.remove(taskId);
+                    if (future != null) {
+                        future.complete(message);
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("[MCPClientWebSocket] Failed to parse MCP response: " + e.getMessage());
+            }
+
+            return Listener.super.onText(webSocket, data, last);
+        }
+
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            System.err.println("[MCPClientWebSocket] ❌ WebSocket error: " + error.getMessage());
+        }
     }
 }

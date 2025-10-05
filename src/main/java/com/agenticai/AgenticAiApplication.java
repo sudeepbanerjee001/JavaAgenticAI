@@ -15,7 +15,12 @@ public class AgenticAiApplication {
 
     @Bean
     public MCPClientWebSocket mcpClientWebSocket() {
-        return new MCPClientWebSocket("ws://localhost:8080");
+        try {
+            return new MCPClientWebSocket("ws://localhost:8080/mcp");
+        } catch (Exception e) {
+            // Wrap in RuntimeException so Spring can handle it
+            throw new RuntimeException("Failed to initialize MCPClientWebSocket", e);
+        }
     }
 
     @Bean
