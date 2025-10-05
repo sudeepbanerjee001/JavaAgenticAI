@@ -11,9 +11,13 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class AgentService {
 
+    private static final Logger log = LoggerFactory.getLogger(AgentService.class);
     private final MCPClientWebSocket mcpClient;
     private static final int CHUNK_SIZE = 3000; // chars per chunk
 
@@ -24,13 +28,18 @@ public class AgentService {
     // ----------------- Existing normal task processing -----------------
     public String process(String task, String taskId) {
         String intent = detectIntent(task);
+        log.info("[AgentService] Detected intent: {}", intent);
+
         String prompt = buildPrompt(task, intent);
+        log.info("[AgentService] Built prompt:\n{}", prompt);
 
         try {
             CompletableFuture<String> futureResponse = mcpClient.sendMessage(taskId, prompt);
-            return futureResponse.get();
+            String response = futureResponse.get();
+            log.info("[AgentService] Received response from MCP:\n{}", response);
+            return response;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[AgentService] Error communicating with MCP/LLM", e);
             return "Error communicating with MCP/LLM: " + e.getMessage();
         }
     }
@@ -66,7 +75,7 @@ public class AgentService {
             return finalResponse.toString();
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("[AgentService] Error analyzing repository", e);
             return "Error analyzing repository: " + e.getMessage();
         }
     }
@@ -109,11 +118,13 @@ public class AgentService {
 
     private String sendToMCP(String taskId, String prompt) throws ExecutionException, InterruptedException {
         CompletableFuture<String> future = mcpClient.sendMessage(taskId, prompt);
-        return future.get();
+        String resp = future.get();
+        log.info("[AgentService] sendToMCP response:\n{}", resp);
+        return resp;
     }
 
     // ----------------- Existing intent detection -----------------
-    private String detectIntent(String task) {
+    public String detectIntent(String task) {
         String lower = task.toLowerCase();
         if (lower.contains("refactor") || lower.contains("microservice") || lower.contains("architecture"))
             return "microservice";

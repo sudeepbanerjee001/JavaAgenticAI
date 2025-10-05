@@ -1,12 +1,12 @@
 package com.agenticai.controller;
 
+import com.agenticai.service.AgentService;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
 
-import com.agenticai.service.AgentService;
-
 @RestController
-@RequestMapping("/agent")
+@RequestMapping("/invoke")
 public class AgentRestController {
 
     private final AgentService agentService;
@@ -15,70 +15,22 @@ public class AgentRestController {
         this.agentService = agentService;
     }
 
-    /**
-     * Handle a user task request and return the AI's answer.
-     *
-     * Request JSON:
-     * {
-     *   "taskId": "task-123",
-     *   "task": "Explain this Java code..."
-     * }
-     *
-     * Response JSON:
-     * {
-     *   "taskId": "task-123",
-     *   "answer": "AI explanation..."
-     * }
-     */
-    @PostMapping("/task")
-    public Map<String, String> handleTask(@RequestBody Map<String, String> body) {
-        String taskId = body.get("taskId");
-        String task = body.get("task");
+    @PostMapping
+    public String invoke(@RequestBody Map<String, Object> request) {
+        String userMessage = (String) request.get("userMessage");
+        String taskId = (String) request.get("taskId");
 
-        if (taskId == null || task == null) {
-            throw new IllegalArgumentException("Both 'taskId' and 'task' are required in request body");
-        }
+        System.out.println("[Agentic AI] Received request: \"" + userMessage + "\" (taskId=" + taskId + ")");
 
-        // Pass both task and taskId to AgentService
-        String answer = agentService.process(task, taskId);
+        // Detect intent
+        String intent = agentService.detectIntent(userMessage);
+        System.out.println("[Agentic AI] Detected intent: " + intent);
 
-        return Map.of(
-                "taskId", taskId,
-                "answer", answer
-        );
-    }
+        // Process message
+        String response = agentService.process(userMessage, taskId);
 
-    /**
-     * Handle a repository request for microservice migration.
-     *
-     * Request JSON:
-     * {
-     *   "taskId": "task-456",
-     *   "repoPath": "/path/to/local/repo"
-     *   // or a Git URL like "https://github.com/user/repo.git"
-     * }
-     *
-     * Response JSON:
-     * {
-     *   "taskId": "task-456",
-     *   "migrationPlan": "AI generated microservice plan and code..."
-     * }
-     */
-    @PostMapping("/repo")
-    public Map<String, String> handleRepo(@RequestBody Map<String, String> body) {
-        String taskId = body.get("taskId");
-        String repoPath = body.get("repoPath");
+        System.out.println("[Agentic AI] Response for taskId=" + taskId + ": " + response);
 
-        if (taskId == null || repoPath == null) {
-            throw new IllegalArgumentException("Both 'taskId' and 'repoPath' are required in request body");
-        }
-
-        // Call the new AgentService method to process the repository
-        String migrationPlan = agentService.process(repoPath, taskId);
-
-        return Map.of(
-                "taskId", taskId,
-                "migrationPlan", migrationPlan
-        );
+        return response;
     }
 }

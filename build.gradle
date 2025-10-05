@@ -16,4 +16,5 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
 }

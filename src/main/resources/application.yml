@@ -1,5 +1,15 @@
 server:
   port: 8081
 
+tool:
+  endpoint: http://localhost:8081/invoke
+  name: Java Agentic AI Developer
+  intents:
+    - codeAssist
+    - refactorCode
+    - debugCode
+  description: Expert Java developer assistant
+
 mcp:
-  serverUrl: http://localhost:8080
+  server:
+    url: ws://localhost:8080
