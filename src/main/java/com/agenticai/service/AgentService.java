@@ -1,62 +1,78 @@
 package com.agenticai.service;
 
 import com.agenticai.client.MCPClientWebSocket;
-import com.agenticai.memory.MemoryStore;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AgentService {
 
-    private static final Logger log = LoggerFactory.getLogger(AgentService.class);
-    private final MCPClientWebSocket mcpClient;
-    private final MemoryStore memoryStore;
+    private final MCPClientWebSocket mcpClientWebSocket;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private static final int CHUNK_SIZE = 3000;
 
-    public AgentService(MCPClientWebSocket mcpClient, MemoryStore memoryStore) {
-        this.mcpClient = mcpClient;
-        this.memoryStore = memoryStore;
+    // Map to track taskId -> CompletableFuture
+    private final ConcurrentHashMap<String, CompletableFuture<String>> taskFutures = new ConcurrentHashMap<>();
+
+    public AgentService(@Lazy MCPClientWebSocket mcpClientWebSocket) {
+        this.mcpClientWebSocket = mcpClientWebSocket;
     }
 
-    // ----------------- Unified processTask -----------------
-    public String processTask(String task) {
-        String taskId = "task-" + System.currentTimeMillis();
+    public CompletableFuture<String> submitTask(String task, String intent) {
         try {
-            // Create JSON payload with taskId and task
-            Map<String, Object> payloadMap = new HashMap<>();
-            payloadMap.put("taskId", taskId);
-            payloadMap.put("task", task);
-            String payload = objectMapper.writeValueAsString(payloadMap);
+            String taskId = "task-" + UUID.randomUUID();
+            CompletableFuture<String> future = new CompletableFuture<>();
+            taskFutures.put(taskId, future);
 
-            // Send payload using updated MCPClientWebSocket
-            CompletableFuture<String> future = mcpClient.sendMessage(payload);
+            // Prepare JSON payload
+            String payload = objectMapper.writeValueAsString(new TaskPayload(taskId, task, intent));
 
-            String response = future.get();
-            log.info("[AgentService] processTask response: {}", response);
+            // Send to MCP
+            mcpClientWebSocket.sendMessage(payload);
 
-            memoryStore.storeResponse(response);
-            return response;
-
+            return future;
         } catch (Exception e) {
-            log.error("[AgentService] Error processing task", e);
-            return "Error: " + e.getMessage();
+            CompletableFuture<String> failed = new CompletableFuture<>();
+            failed.completeExceptionally(e);
+            return failed;
         }
     }
 
-    // ----------------- Intent detection -----------------
-    public String detectIntent(String task) {
-        String lower = task.toLowerCase();
-        if (lower.contains("refactor") || lower.contains("microservice") || lower.contains("architecture"))
-            return "microservice";
-        if (lower.contains("java") || lower.contains("python") || lower.contains("c++"))
-            return "generate";
-        return "general";
+    /**
+     * Called by MCPClientWebSocket when a message is received.
+     */
+    public void handleMCPResponse(String response) {
+        try {
+            TaskPayload payload = objectMapper.readValue(response, TaskPayload.class);
+            String taskId = payload.taskId;
+
+            CompletableFuture<String> future = taskFutures.remove(taskId);
+            if (future != null) {
+                future.complete(response);
+            } else {
+                System.out.println("[AgentService] Received response for unknown taskId: " + taskId);
+            }
+        } catch (Exception e) {
+            System.err.println("[AgentService] Failed to handle MCP response: " + e.getMessage());
+        }
+    }
+
+    // Helper class for payload
+    private static class TaskPayload {
+        public String taskId;
+        public String task;
+        public String intent;
+
+        public TaskPayload() {}
+
+        public TaskPayload(String taskId, String task, String intent) {
+            this.taskId = taskId;
+            this.task = task;
+            this.intent = intent;
+        }
     }
 }

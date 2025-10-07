@@ -2,7 +2,7 @@ server:
   port: 8081
 
 tool:
-  endpoint: http://localhost:8081/agent/invoke
+  endpoint: http://localhost:8081/agent/task
   name: Java Agentic AI Developer
   intents:
     - codeAssist
